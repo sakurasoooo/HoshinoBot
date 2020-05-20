@@ -128,3 +128,4 @@ venv.bak/
 
 # mypy
 .mypy_cache/
+hoshino/modules/yobot/yobot/
