@@ -14,8 +14,8 @@ from .gacha import Gacha
 from ..chara import Chara
 
 sv = Service('gacha')
-jewel_limit = DailyNumberLimiter(6000)
-tenjo_limit = DailyNumberLimiter(1)
+jewel_limit = DailyNumberLimiter(60000)
+tenjo_limit = DailyNumberLimiter(10)
 
 GACHA_DISABLE_NOTICE = '本群转蛋功能已禁用\n如欲开启，请与维护组联系'
 JEWEL_EXCEED_NOTICE = f'您今天已经抽过{jewel_limit.max}钻了，欢迎明早5点后再来！'

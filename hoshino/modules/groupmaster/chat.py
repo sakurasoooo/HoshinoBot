@@ -28,7 +28,7 @@ async def chat_waifu(session):
 async def chat_laogong(session):
     await session.send('你给我滚！', at_sender=True)
 
-@sv.on_command('mua', only_to_me=True)
+@sv.on_command('mua',aliases=('亲一个'), only_to_me=True)
 async def chat_mua(session):
     await session.send('笨蛋~', at_sender=True)
 

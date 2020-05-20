@@ -746,3 +746,97 @@ async def list_challenge(bot:NoneBot, ctx:Context_T, args:ParseResult):
         c['flag_str'] = '|补时' if flag & bm.EXT else '|尾刀' if flag & bm.LAST else '|掉线' if flag & bm.TIMEOUT else '|通常'
         msg.append(challenstr.format_map(c))
     await bot.send(ctx, '\n'.join(msg))
+
+
+def compensation(boss_hp, player_1, player_2):
+    timeDict = [(1.1, 29), (1.2, 35), (1.3, 41),\
+                (1.4, 46), (1.5, 50), (1.6, 54),\
+                (1.7, 58), (1.8, 60), (1.9, 63),\
+                (2.0, 65), (3.0, 80), (4.0, 88), (4.3, 90)]
+    boss_hp = round(float(boss_hp),1)
+    player_1 = round(float(player_1),1)
+    player_2 = round(float(player_2),1)
+    data_1 = player_1 / (boss_hp - player_2) # player 2 first
+    data_2 = player_2 / (boss_hp - player_1) # player 1 first
+    returnTime = 0
+    data = round(max(data_1,data_2),1)
+    for i, j in timeDict:
+        returnTime = j if data >= i else returnTime
+
+    if data_1 > data_2:
+        return {"P":'骑士君B',"rate":data,"time":returnTime}
+    else:
+        return {"P":'骑士君A',"rate":data,"time":returnTime}
+
+@cb_cmd(('合刀'), ArgParser(usage='!合刀 A<伤害值> B<伤害值>', arg_dict={
+    'A': ArgHolder(tip='伤害值A', type=damage_int),
+    'B': ArgHolder(tip='伤害值B', type=damage_int)}))
+async def calculate_remainingTime(bot:NoneBot, ctx:Context_T, args:ParseResult):
+    bm = BattleMaster(ctx['group_id'])
+    now = datetime.now()
+
+    _, _, cur_hp = bm.get_challenge_progress(1, now)
+    damage_1 = args.A
+    damage_2 = args.B
+    msg = ''
+    #两名玩家伤害必须同视小于BOSS剩余HP
+    if damage_1 < cur_hp and damage_2 < cur_hp:
+        result = compensation(cur_hp,damage_1,damage_2)
+        if result["rate"]  > 1.1: 
+            msg = f'{result["P"]}先结束战斗可获得最大倍率{result["rate"]},补偿时间为{result["time"]}（<ゝω・）☆'
+        else:
+            msg = '骑士君们需要提高伤害呢(ง •̀_•́)ง'
+    else: 
+        if damage_1 > damage_2:
+            msg = '骑士君A的伤害太高啦Σ(っ °Д °;)っ' 
+        else:
+            msg = '骑士君B的伤害太高啦Σ(っ °Д °;)っ'
+    await bot.send(ctx, '\n'+msg, at_sender=True)
+
+
+@cb_cmd(('科学合刀','不科学合刀','魔法合刀'), ArgParser(usage='!科学合刀 M<伤害值> (T<时间>) D<伤害值> (B<生命值>)', arg_dict={
+    'M': ArgHolder(tip='伤害值M', type=damage_int),
+    'T': ArgHolder(tip='击杀用时', type=int,default=0),
+    'D': ArgHolder(tip='伤害值D', type=damage_int),
+    'B': ArgHolder(tip='BOSS当前生命值', type=boss_int,default=0)}))
+async def calculate_scientific_remainingTime(bot:NoneBot, ctx:Context_T, args:ParseResult):
+    bm = BattleMaster(ctx['group_id'])
+    now = datetime.now()
+
+    msg = ''
+    damage_1 = args.M
+    damage_2 = args.D 
+    requiredTime = args.T
+    cur_hp = args.B
+    if cur_hp == 0 : _, _, cur_hp = bm.get_challenge_progress(1, now)
+    max_extra_damage = damage_1/8.2
+    if requiredTime == 0: requiredTime = 1
+    fixed_med = cur_hp/requiredTime*10.99999
+    requiredDamage = cur_hp - fixed_med
+    if damage_1 > damage_2:
+        if (damage_1+damage_2)>=cur_hp:
+            if cur_hp < 5000 :
+                msg = f'建议使用最强刀收尾，可获得完整补偿刀'
+            else :
+                if damage_2 > cur_hp:
+                    #msg = f'最大白嫖{int(max_extra_damage)}伤害\n'
+                    msg = '没救了，建议使用DD刀收尾，降低亏损'
+                else:
+                    if damage_2 + max_extra_damage > cur_hp:  
+                        if requiredDamage > damage_2:
+                            msg = f'需要{int(requiredDamage)}-{int(cur_hp)}伤害合刀，可获得最大补偿刀90s'
+                        else:
+                            msg = f'使用DD刀合刀即可获得最大补偿刀90s'
+                    else:
+                        if cur_hp < damage_1:
+                            msg = f'需要{int(requiredDamage)}-{int(cur_hp)}伤害合刀，可获得最大补偿刀90s'
+                        else:
+                            msg = f'需要{int(requiredDamage)}-{int(cur_hp)}伤害合刀\n可获得最大补偿刀90s\n可获得理论最大白嫖刀{int(max_extra_damage)}'
+        else:
+            msg = 'BOSS无法合刀击杀'
+    else: 
+        msg = "请确保'M'为最高伤害"
+    await bot.send(ctx, '\n'+msg, at_sender=True)
+
+#感谢https://ngabbs.com/read.php?tid=21714232 
+# FledgingxDestined丶（id42923289）的理论基础
