@@ -7,7 +7,7 @@ from hoshino.service import Service, Privilege
 
 sv = Service('deepchat', manage_priv=Privilege.SUPERUSER, enable_on_default=False, visible=False)
 
-api = util.load_config(__file__)['0b47fa7c91660418']
+api = util.load_config(__file__)['deepchat_api']
 
 @sv.on_message('group')
 async def deepchat(bot:NoneBot, ctx):
