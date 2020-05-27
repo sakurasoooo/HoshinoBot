@@ -2,6 +2,7 @@ import os
 import re
 import time
 import random
+from datetime import datetime
 
 from nonebot import on_command, CommandSession, MessageSegment, NoneBot
 from nonebot.exceptions import CQHttpError
@@ -9,14 +10,14 @@ from nonebot.exceptions import CQHttpError
 from hoshino import R, Service, Privilege
 from hoshino.util import FreqLimiter, DailyNumberLimiter
 
-_max = 5
+_max = 3
 EXCEED_NOTICE = f'您今天已经冲过{_max}次了，请明早5点后再来！'
 _nlmt = DailyNumberLimiter(_max)
-_flmt = FreqLimiter(5)
+_flmt = FreqLimiter(3)
 
 sv = Service('setu', manage_priv=Privilege.SUPERUSER, enable_on_default=True, visible=False)
 setu_folder = R.img('setu/').path
-
+htu_folder = R.img('setu/setu/').path
 def setu_gener():
     while True:
         filelist = os.listdir(setu_folder)
@@ -26,9 +27,22 @@ def setu_gener():
                 yield R.img('setu/', filename)
 
 setu_gener = setu_gener()
+def htu_gener():
+    while True:
+        filelist = os.listdir(htu_folder)
+        random.shuffle(filelist)
+        for filename in filelist:
+            if os.path.isfile(os.path.join(htu_folder, filename)):
+                yield R.img('setu/setu/', filename)
 
+htu_gener = htu_gener()
 def get_setu():
-    return setu_gener.__next__()
+    random.seed(datetime.now())
+    x = random.random()
+    if x > 0.25:
+        return setu_gener.__next__()
+    else:
+        return htu_gener.__next__()
 
 
 @sv.on_rex(re.compile(r'不够[涩瑟色]|[涩瑟色]图|来一?[点份张].*[涩瑟色]|再来[点份张]|看过了|铜'), normalize=True)
