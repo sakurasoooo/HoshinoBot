@@ -30,7 +30,7 @@ api = "http://openapi.tuling123.com/openapi/api/v2"
 @sv.on_message('group')
 async def deepchat(bot:NoneBot, ctx):
     msg = ctx['message'].extract_plain_text()
-    if not msg or random.random() > 0.05:
+    if not msg or random.random() > 0.02:
         return
     req = {
         "reqType":0,

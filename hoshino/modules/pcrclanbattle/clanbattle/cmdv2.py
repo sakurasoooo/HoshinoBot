@@ -8,7 +8,7 @@ PCR会战管理命令 v2
 - 唯一：There should be one-- and preferably only one --obvious way to do it.
 - 耐草：参数不规范时尽量执行
 """
-
+import math
 import os
 from datetime import datetime, timedelta
 from typing import List
@@ -749,24 +749,30 @@ async def list_challenge(bot:NoneBot, ctx:Context_T, args:ParseResult):
 
 
 def compensation(boss_hp, player_1, player_2):
-    timeDict = [(1.1, 29), (1.2, 35), (1.3, 41),\
-                (1.4, 46), (1.5, 50), (1.6, 54),\
-                (1.7, 58), (1.8, 60), (1.9, 63),\
-                (2.0, 65), (3.0, 80), (4.0, 88), (4.3, 90)]
+    # timeDict = [(1.1,19), (1.2, 26), (1.3, 31),\
+    #             (1.4, 36), (1.5, 41), (1.6, 44),\
+    #             (1.7, 48), (1.8,50), (1.9, 53),\
+    #             (2.0, 55), (3.0, 70), (4.0, 78), (8.2, 90)]
     boss_hp = round(float(boss_hp),1)
     player_1 = round(float(player_1),1)
     player_2 = round(float(player_2),1)
-    data_1 = player_1 / (boss_hp - player_2) # player 2 first
-    data_2 = player_2 / (boss_hp - player_1) # player 1 first
-    returnTime = 0
-    data = round(max(data_1,data_2),1)
-    for i, j in timeDict:
-        returnTime = j if data >= i else returnTime
+    rate1 = round(player_1 / (boss_hp - player_2)) # player 2 first
+    rate2 = round(player_2 / (boss_hp - player_1)) # player 1 first
+    data_1 = math.ceil((1-(boss_hp-player_2)/player_1)*90+10) # player 2 first
+    data_2 = math.ceil((1-(boss_hp-player_1)/player_2)*90+10) # player 1 first
+    #returnTime = 0
+    #data = round(max(data_1,data_2),1)
+    # for i, j in timeDict:
+    #     returnTime = j if data >= i else returnTime
 
     if data_1 > data_2:
-        return {"P":'骑士君B',"rate":data,"time":returnTime}
+        if data_1 > 90: data_1 = 90
+
+        return {"P":'骑士君B',"rate":rate1,"time":data_1}
     else:
-        return {"P":'骑士君A',"rate":data,"time":returnTime}
+        if data_2 > 90: data_2 = 90
+
+        return {"P":'骑士君A',"rate":rate2,"time":data_2 }
 
 @cb_cmd(('合刀'), ArgParser(usage='!合刀 A<伤害值> B<伤害值>', arg_dict={
     'A': ArgHolder(tip='伤害值A', type=damage_int),
@@ -779,8 +785,8 @@ async def calculate_remainingTime(bot:NoneBot, ctx:Context_T, args:ParseResult):
     damage_1 = args.A
     damage_2 = args.B
     msg = ''
-    #两名玩家伤害必须同视小于BOSS剩余HP
-    if damage_1 < cur_hp and damage_2 < cur_hp:
+    #两名玩家伤害必须同时小于BOSS剩余HP
+    if damage_1 <= cur_hp and damage_2 <= cur_hp:
         result = compensation(cur_hp,damage_1,damage_2)
         if result["rate"]  > 1.1: 
             msg = f'{result["P"]}先结束战斗可获得最大倍率{result["rate"]},补偿时间为{result["time"]}（<ゝω・）☆'
