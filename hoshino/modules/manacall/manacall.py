@@ -18,6 +18,6 @@ async def mana_call():
     now = datetime.now(pytz.timezone('Asia/Shanghai'))
     if now.hour%6!=0:
         return 
-    pic = R.img('我的天啊你看看都几点了.jpg').cqcode
+    pic = R.img('mana小助手.png').cqcode
     msg = f"{pic}"
     await sv.broadcast(msg, 'manacall', 0)
