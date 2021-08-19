@@ -18,14 +18,6 @@ def damage_int(x:str) -> int:
             return x
     raise ParseError('伤害值不合法 伤害值应为小于一亿的非负整数')
 
-def boss_int(x:str) -> int:
-    x = util.normalize_str(x)
-    if m := _rex_dint.match(x):
-        x = int(m.group(1)) * _unit_rate[m.group(2).lower()]
-        if x < 100000000:
-            return x
-    raise ParseError('生命值不合法 生命值应为小于一亿的非负整数')
-
 
 def boss_code(x:str) -> int:
     x = util.normalize_str(x)
@@ -65,5 +57,5 @@ def server_name(x:int) -> str:
         return 'unknown'
 
 __all__ = [
-    'damage_int', 'boss_code', 'round_code', 'server_code', 'server_name','boss_int'
+    'damage_int', 'boss_code', 'round_code', 'server_code', 'server_name'
 ]

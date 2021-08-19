@@ -8,8 +8,9 @@ PCR会战管理命令 v2
 - 唯一：There should be one-- and preferably only one --obvious way to do it.
 - 耐草：参数不规范时尽量执行
 """
-import math
+
 import os
+import asyncio
 from datetime import datetime, timedelta
 from typing import List
 from matplotlib import pyplot as plt
@@ -22,8 +23,7 @@ from aiocqhttp.exceptions import ActionFailed
 from nonebot import NoneBot
 from nonebot import MessageSegment as ms
 from nonebot.typing import Context_T
-from hoshino import util
-from hoshino.service import Privilege as Priv
+from hoshino import util, priv
 
 from . import sv, cb_cmd
 from .argparse import ArgParser, ArgHolder, ParseResult
@@ -59,7 +59,7 @@ def _check_member(bm:BattleMaster, uid:int, alt:int, tip=None):
     return mem
 
 def _check_admin(ctx:Context_T, tip:str=''):
-    if not sv.check_priv(ctx, Priv.ADMIN):
+    if not priv.check_priv(ctx, priv.ADMIN):
         raise PermissionDeniedError(ERROR_PERMISSION_DENIED + tip)
 
 
@@ -105,7 +105,7 @@ async def add_member(bot:NoneBot, ctx:Context_T, args:ParseResult):
             raise NotFoundError(f'Error: 无法获取群员信息，请检查{uid}是否属于本群')
     if not name:
         m = await bot.get_group_member_info(self_id=ctx['self_id'], group_id=bm.group, user_id=uid)
-        name = m['card'] or m['nickname'] or str(m['user_id'])
+        name = util.escape(m['card']) or util.escape(m['nickname']) or str(m['user_id'])
 
     mem = bm.get_member(uid, bm.group) or bm.get_member(uid, 0)     # 兼容cmdv1
     if mem:
@@ -186,7 +186,7 @@ async def process_challenge(bot:NoneBot, ctx:Context_T, ch:ParseResult):
     """
 
     bm = BattleMaster(ctx['group_id'])
-    now = datetime.now()
+    now = datetime.now() - timedelta(days=ch.get('dayoffset', 0))
     clan = _check_clan(bm)
     mem = _check_member(bm, ch.uid, ch.alt)
 
@@ -200,6 +200,13 @@ async def process_challenge(bot:NoneBot, ctx:Context_T, ch:ParseResult):
         raise NotFoundError('补报尾刀请给出伤害值')     # 补报尾刀必须给出伤害值
 
     msg = ['']
+
+    # 上一刀如果是尾刀，这一刀就是补偿刀
+    challenges = bm.list_challenge_of_user_of_day(mem['uid'], mem['alt'], now)
+    if len(challenges) > 0 and challenges[-1]['flag'] == BattleMaster.LAST:
+        flag = BattleMaster.EXT
+        msg.append('⚠️已自动标记为补时刀')
+
     if round_ != cur_round or boss != cur_boss:
         msg.append('⚠️上报与当前进度不一致')
     else:   # 伤害校对
@@ -239,7 +246,8 @@ async def process_challenge(bot:NoneBot, ctx:Context_T, ch:ParseResult):
     '': ArgHolder(tip='伤害值', type=damage_int),
     '@': ArgHolder(tip='qq号', type=int, default=0),
     'R': ArgHolder(tip='周目数', type=round_code, default=0),
-    'B': ArgHolder(tip='Boss编号', type=boss_code, default=0)}))
+    'B': ArgHolder(tip='Boss编号', type=boss_code, default=0),
+    'D': ArgHolder(tip='日期差', type=int, default=0)}))
 async def add_challenge(bot:NoneBot, ctx:Context_T, args:ParseResult):
     challenge = ParseResult({
         'round': args.R,
@@ -247,7 +255,8 @@ async def add_challenge(bot:NoneBot, ctx:Context_T, args:ParseResult):
         'damage': args.get(''),
         'uid': args['@'] or args.at or ctx['user_id'],
         'alt': ctx['group_id'],
-        'flag': BattleMaster.NORM
+        'flag': BattleMaster.NORM,
+        'dayoffset': args.get('D', 0)
     })
     await process_challenge(bot, ctx, challenge)
 
@@ -420,12 +429,7 @@ def _gen_namelist_text(bm:BattleMaster, uidlist:List[int], memolist:List[str]=No
     return mems
 
 
-SUBSCRIBE_TIP = '''
-※预约可附留言(不可包含空格)
-例："!预约 5 m留言"
-※使用"!预约上限"可设置上限
-例："!预约上限 B5 6"将五王的预约上限设置为6'
-'''
+SUBSCRIBE_TIP = ''
 
 @cb_cmd('预约', ArgParser(usage='!预约 <Boss号> M留言', arg_dict={
     '': ArgHolder(tip='Boss编号', type=boss_code),
@@ -784,13 +788,17 @@ async def _do_show_remain(bot:NoneBot, ctx:Context_T, args:ParseResult, at_user:
     clan = _check_clan(bm)
     if at_user:
         _check_admin(ctx, '才能催刀。您可以用【!查刀】查询余刀')
-    rlist = bm.list_challenge_remain(1, datetime.now())
+    rlist = bm.list_challenge_remain(1, datetime.now() - timedelta(days=args.get('D', 0)))
     rlist.sort(key=lambda x: x[3] + x[4], reverse=True)
     msg = [ f"\n{clan['name']}今日余刀：" ]
+    n = len(rlist)
+    # for i in range(0, n, 10):
     for uid, _, name, r_n, r_e in rlist:
         if r_n or r_e:
             msg.append(f"剩{r_n}刀 补时{r_e}刀 | {ms.at(uid) if at_user else name}")
-    if len(msg) == 1:
+        # await bot.send(ctx, '\n'.join(msg))
+        # msg.clear()
+    if not n:
         await bot.send(ctx, f"今日{clan['name']}所有成员均已下班！各位辛苦了！", at_sender=True)
     else:
         msg.append('若有负数说明报刀有误 请注意核对\n使用“!出刀记录 @qq”可查看详细记录')
@@ -799,7 +807,8 @@ async def _do_show_remain(bot:NoneBot, ctx:Context_T, args:ParseResult, at_user:
         await bot.send(ctx, '\n'.join(msg), at_sender=True)
 
 
-@cb_cmd('查刀', ArgParser(usage='!查刀'))
+@cb_cmd('查刀', ArgParser(usage='!查刀', arg_dict={
+        'D': ArgHolder(tip='日期差', type=int, default=0)}))
 async def list_remain(bot:NoneBot, ctx:Context_T, args:ParseResult):
     await _do_show_remain(bot, ctx, args, at_user=False)
 @cb_cmd('催刀', ArgParser(usage='!催刀'))
@@ -808,11 +817,12 @@ async def urge_remain(bot:NoneBot, ctx:Context_T, args:ParseResult):
 
 
 @cb_cmd('出刀记录', ArgParser(usage='!出刀记录 (@qq)', arg_dict={
-        '@': ArgHolder(tip='qq号', type=int, default=0)}))
+        '@': ArgHolder(tip='qq号', type=int, default=0),
+        'D': ArgHolder(tip='日期差', type=int, default=0)}))
 async def list_challenge(bot:NoneBot, ctx:Context_T, args:ParseResult):
     bm = BattleMaster(ctx['group_id'])
     clan = _check_clan(bm)
-    now = datetime.now()
+    now = datetime.now() - timedelta(days=args.D)
     zone = bm.get_timezone_num(clan['server'])
     uid = args['@'] or args.at
     if uid:
@@ -821,112 +831,19 @@ async def list_challenge(bot:NoneBot, ctx:Context_T, args:ParseResult):
     else:
         challen = bm.list_challenge_of_day(clan['cid'], now, zone)
 
+    n = len(challen)
+    if not n:
+        await bot.send(ctx, "未检索到出刀记录")
+        return
     msg = [ f'{clan["name"]}出刀记录：\n编号|出刀者|周目|Boss|伤害|标记' ]
-    challenstr = 'E{eid:0>3d}|{name}|r{round}|b{boss}|{dmg: >7,d}{flag_str}'
-    for c in challen:
-        mem = bm.get_member(c['uid'], c['alt'])
-        c['name'] = mem['name'] if mem else c['uid']
-        flag = c['flag']
-        c['flag_str'] = '|补时' if flag & bm.EXT else '|尾刀' if flag & bm.LAST else '|掉线' if flag & bm.TIMEOUT else '|通常'
-        msg.append(challenstr.format_map(c))
-    await bot.send(ctx, '\n'.join(msg))
-
-
-def compensation(boss_hp, player_1, player_2):
-    # timeDict = [(1.1,19), (1.2, 26), (1.3, 31),\
-    #             (1.4, 36), (1.5, 41), (1.6, 44),\
-    #             (1.7, 48), (1.8,50), (1.9, 53),\
-    #             (2.0, 55), (3.0, 70), (4.0, 78), (8.2, 90)]
-    boss_hp = round(float(boss_hp),1)
-    player_1 = round(float(player_1),1)
-    player_2 = round(float(player_2),1)
-    rate1 = round(player_1 / (boss_hp - player_2)) # player 2 first
-    rate2 = round(player_2 / (boss_hp - player_1)) # player 1 first
-    data_1 = math.ceil((1-(boss_hp-player_2)/player_1)*90+10) # player 2 first
-    data_2 = math.ceil((1-(boss_hp-player_1)/player_2)*90+10) # player 1 first
-    #returnTime = 0
-    #data = round(max(data_1,data_2),1)
-    # for i, j in timeDict:
-    #     returnTime = j if data >= i else returnTime
-
-    if data_1 > data_2:
-        if data_1 > 90: data_1 = 90
-
-        return {"P":'骑士君B',"rate":rate1,"time":data_1}
-    else:
-        if data_2 > 90: data_2 = 90
-
-        return {"P":'骑士君A',"rate":rate2,"time":data_2 }
-
-@cb_cmd(('合刀'), ArgParser(usage='!合刀 A<伤害值> B<伤害值>', arg_dict={
-    'A': ArgHolder(tip='伤害值A', type=damage_int),
-    'B': ArgHolder(tip='伤害值B', type=damage_int)}))
-async def calculate_remainingTime(bot:NoneBot, ctx:Context_T, args:ParseResult):
-    bm = BattleMaster(ctx['group_id'])
-    now = datetime.now()
-
-    _, _, cur_hp = bm.get_challenge_progress(1, now)
-    damage_1 = args.A
-    damage_2 = args.B
-    msg = ''
-    #两名玩家伤害必须同时小于BOSS剩余HP
-    if damage_1 <= cur_hp and damage_2 <= cur_hp:
-        result = compensation(cur_hp,damage_1,damage_2)
-        if result["rate"]  > 1.1: 
-            msg = f'{result["P"]}先结束战斗可获得最大倍率{result["rate"]},补偿时间为{result["time"]}（<ゝω・）☆'
-        else:
-            msg = '骑士君们需要提高伤害呢(ง •̀_•́)ง'
-    else: 
-        if damage_1 > damage_2:
-            msg = '骑士君A的伤害太高啦Σ(っ °Д °;)っ' 
-        else:
-            msg = '骑士君B的伤害太高啦Σ(っ °Д °;)っ'
-    await bot.send(ctx, '\n'+msg, at_sender=True)
-
-
-@cb_cmd(('科学合刀','不科学合刀','魔法合刀'), ArgParser(usage='!科学合刀 M<伤害值> (T<时间>) D<伤害值> (B<生命值>)', arg_dict={
-    'M': ArgHolder(tip='伤害值M', type=damage_int),
-    'T': ArgHolder(tip='击杀用时', type=int,default=0),
-    'D': ArgHolder(tip='伤害值D', type=damage_int),
-    'B': ArgHolder(tip='BOSS当前生命值', type=boss_int,default=0)}))
-async def calculate_scientific_remainingTime(bot:NoneBot, ctx:Context_T, args:ParseResult):
-    bm = BattleMaster(ctx['group_id'])
-    now = datetime.now()
-
-    msg = ''
-    damage_1 = args.M
-    damage_2 = args.D 
-    requiredTime = args.T
-    cur_hp = args.B
-    if cur_hp == 0 : _, _, cur_hp = bm.get_challenge_progress(1, now)
-    max_extra_damage = damage_1/8.2
-    if requiredTime == 0: requiredTime = 1
-    fixed_med = cur_hp/requiredTime*10.99999
-    requiredDamage = cur_hp - fixed_med
-    if damage_1 > damage_2:
-        if (damage_1+damage_2)>=cur_hp:
-            if cur_hp < 5000 :
-                msg = f'建议使用最强刀收尾，可获得完整补偿刀'
-            else :
-                if damage_2 > cur_hp:
-                    #msg = f'最大白嫖{int(max_extra_damage)}伤害\n'
-                    msg = '没救了，建议使用DD刀收尾，降低亏损'
-                else:
-                    if damage_2 + max_extra_damage > cur_hp:  
-                        if requiredDamage > damage_2:
-                            msg = f'需要{int(requiredDamage)}-{int(cur_hp)}伤害合刀，可获得最大补偿刀90s'
-                        else:
-                            msg = f'使用DD刀合刀即可获得最大补偿刀90s'
-                    else:
-                        if cur_hp < damage_1:
-                            msg = f'需要{int(requiredDamage)}-{int(cur_hp)}伤害合刀，可获得最大补偿刀90s'
-                        else:
-                            msg = f'需要{int(requiredDamage)}-{int(cur_hp)}伤害合刀\n可获得最大补偿刀90s\n可获得理论最大白嫖刀{int(max_extra_damage)}'
-        else:
-            msg = 'BOSS无法合刀击杀'
-    else: 
-        msg = "请确保'M'为最高伤害"
-    await bot.send(ctx, '\n'+msg, at_sender=True)
-
-#感谢https://ngabbs.com/read.php?tid=21714232 
-# FledgingxDestined丶（id42923289）的理论基础
+    for i in range(0, n, 8):
+        challenstr = 'E{eid:0>3d}|{name}|r{round}|b{boss}|{dmg: >7,d}{flag_str}'
+        for c in challen[i:min(n, i+8)]:
+            mem = bm.get_member(c['uid'], c['alt'])
+            c['name'] = mem['name'] if mem else c['uid']
+            flag = c['flag']
+            c['flag_str'] = '|补时' if flag & bm.EXT else '|尾刀' if flag & bm.LAST else '|掉线' if flag & bm.TIMEOUT else '|通常'
+            msg.append(challenstr.format_map(c))
+        await bot.send(ctx, '\n'.join(msg))
+        msg.clear()
+        await asyncio.sleep(0.5)

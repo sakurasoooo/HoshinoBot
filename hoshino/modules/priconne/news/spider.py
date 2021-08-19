@@ -1,16 +1,12 @@
 """Ref: https://github.com/yuudi/yobot/blob/master/src/client/ybplugins/spider
 GPLv3 Licensed. Thank @yuudi for his contribution!
 """
+
 import abc
-from bs4 import BeautifulSoup
 from dataclasses import dataclass
 from typing import List, Union
-from urllib.parse import urljoin
-try:
-    import ujson as json
-except:
-    import json
 
+from bs4 import BeautifulSoup
 from hoshino import aiorequests
 
 
@@ -44,9 +40,9 @@ class BaseSpider(abc.ABC):
     async def get_update(cls) -> List[Item]:
         resp = await cls.get_response()
         items = await cls.get_items(resp)
-        updates = [ i for i in items if i.idx not in cls.idx_cache ]
+        updates = [i for i in items if i.idx not in cls.idx_cache]
         if updates:
-            cls.idx_cache = set(i.idx for i in items)
+            cls.idx_cache.update(i.idx for i in items)
             cls.item_cache = items
         return updates
 
@@ -72,7 +68,7 @@ class SonetSpider(BaseSpider):
 
 
 class BiliSpider(BaseSpider):
-    url = "https://api.biligame.com/news/list?gameExtensionId=267&positionId=2&typeId=&pageNum=1&pageSize=5"
+    url = "http://api.biligame.com/news/list?gameExtensionId=267&positionId=2&pageNum=1&pageSize=7&typeId="
     src_name = "B服官网"
 
     @staticmethod

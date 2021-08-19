@@ -1,7 +1,7 @@
 from nonebot import on_command, CommandSession
 from nonebot import permission as perm
 
-from googletrans import Translator
+from sogou_tr import sogou_tr
 from datetime import datetime, timedelta
 
 # sogou_tr使用帮助：
@@ -39,7 +39,6 @@ async def get_translation(text: str) -> str:
         return '翻译姬冷却中...'
     else:
         get_translation.cdtime = datetime.now() + timedelta(seconds=1)
-        translator = Translator(timeout=300)
-        ret = translator.translate(text,dest='zh-cn')
+        ret = sogou_tr(text)
         # print(sogou_tr.json)
-        return ret.text if None != ret else '翻译姬出错了 ごめんなさい！'
+        return ret if '0' != sogou_tr.json.get('errorCode') else '翻译姬出错了 ごめんなさい！'

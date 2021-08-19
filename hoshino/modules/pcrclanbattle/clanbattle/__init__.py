@@ -1,22 +1,21 @@
 # 公主连接Re:Dive会战管理插件
 # clan == クラン == 戰隊（直译为氏族）（CLANNAD的CLAN（笑））
 
-from typing import Callable, Dict, Tuple, Iterable
+from nonebot import on_command
 
-from nonebot import NoneBot, on_command, CommandSession
-from hoshino import util
-from hoshino.service import Service, Privilege
-from hoshino.res import R
+from hoshino import R, Service, util
+from hoshino.typing import *
+
 from .argparse import ArgParser
 from .exception import *
 
-sv = Service('clanbattle', manage_priv=Privilege.SUPERUSER, enable_on_default=True)
+sv = Service('clanbattle', help_='Hoshino开源版 命令以感叹号开头 发送【!帮助】查看说明', bundle='pcr会战')
 SORRY = 'ごめんなさい！嘤嘤嘤(〒︿〒)'
 
 _registry:Dict[str, Tuple[Callable, ArgParser]] = {}
 
 @sv.on_message('group')
-async def _clanbattle_bus(bot:NoneBot, ctx):
+async def _clanbattle_bus(bot, ctx):
     # check prefix
     start = ''
     for m in ctx['message']:
@@ -28,6 +27,8 @@ async def _clanbattle_bus(bot:NoneBot, ctx):
 
     # find cmd
     plain_text = ctx['message'].extract_plain_text()
+    if len(plain_text) <= 1:
+        return
     cmd, *args = plain_text[1:].split()
     cmd = util.normalize_str(cmd)
     if cmd in _registry:
@@ -63,7 +64,6 @@ def cb_cmd(name, parser:ArgParser) -> Callable:
     return deco
 
 
-# from .cmdv1 import *
 from .cmdv2 import *
 
 
@@ -96,13 +96,9 @@ QUICK_START = f'''
 【查询余刀&催刀】
 !查刀
 !催刀
-【合刀计算器】
-！合刀 A伤害 B伤害
-！科学合刀 M最强一刀 （T最强刀击杀boss所需时间）* D最DD刀 （B自定义boss血量）
-*BOSS无法一刀击杀时T填90
-（）内可不填
 
-※前往 t.cn/A6wBzowv 查看完整命令一览表
+※点击链接分享查看完整命令表
+※或前往 v2.hoshinobot.cc
 ※如有问题请先阅读一览表底部的FAQ
 ※使用前请务必【逐字】阅读开头的必读事项
 '''.rstrip()
@@ -110,3 +106,7 @@ QUICK_START = f'''
 @on_command('!帮助', aliases=('！帮助', '!幫助', '！幫助', '!help', '！help'), only_to_me=False)
 async def cb_help(session:CommandSession):
     await session.send(QUICK_START, at_sender=True)
+    msg = MessageSegment.share(url='https://github.com/Ice-Cirno/HoshinoBot/wiki/%E4%BC%9A%E6%88%98%E7%AE%A1%E7%90%86v2',
+                               title='Hoshino会战管理v2',
+                               content='完整命令一览表')
+    await session.send(msg)
