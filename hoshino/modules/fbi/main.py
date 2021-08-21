@@ -16,7 +16,7 @@ async def concat_head(bot: HoshinoBot, ev: CQEvent):
     await bot.send(ev, msg)
 
 @sv.on_prefix(('出示证件', '出示'))
-async def concat_head(bot: HoshinoBot, ev: CQEvent):
+async def concat_id(bot: HoshinoBot, ev: CQEvent):
 
     msg = await add_id(str(ev.message))
     await bot.send(ev, msg)

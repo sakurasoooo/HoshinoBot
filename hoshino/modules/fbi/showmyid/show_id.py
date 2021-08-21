@@ -23,19 +23,21 @@ async def add(filename, outfile, cascade_file=os.path.dirname(os.path.abspath(__
     if not len(faces):
         return 0
     img = Image.open(filename)
-    img = img.convert("RGBA")
-    faceimg = Image.open(os.path.dirname(os.path.abspath(__file__)) + "/data/fg.png")
-    top_shift_scale = 0.45
-    x_scale = 0.25
+    #img = img.convert("RGBA")
+    fg_img = Image.open(os.path.dirname(os.path.abspath(__file__)) + "/data/fg.png")
+    bg_img = Image.open(os.path.dirname(os.path.abspath(__file__)) + "/data/bg.png")
+    mask_img = Image.open(os.path.dirname(os.path.abspath(__file__)) + "/data/mask.png")
+    # top_shift_scale = 0.45
+    # x_scale = 0.25
     for (x, y, w, h) in faces:
         y_shift = int(h * top_shift_scale)
         x_shift = int(w * x_scale)
         face_w = max(w + 2 * x_shift, h + y_shift)
         
-       # faceimg = faceimg.resize((face_w, face_w))
+        faceimg = faceimg.resize((face_w, face_w))
         r, g, b, a = faceimg.split()
-        img.paste(faceimg, (x - x_shift, y - y_shift), mask=a)
-    img.save(PicPath + outfile)
+        faceimg.paste(img, (0, 0))
+    faceimg.save(PicPath + outfile)
     return 1
 
 
