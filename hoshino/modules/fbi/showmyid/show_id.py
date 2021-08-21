@@ -23,21 +23,19 @@ async def add(filename, outfile, cascade_file=os.path.dirname(os.path.abspath(__
     if not len(faces):
         return 0
     img = Image.open(filename)
-    #img = img.convert("RGBA")
     fg_img = Image.open(os.path.dirname(os.path.abspath(__file__)) + "/data/fg.png")
     bg_img = Image.open(os.path.dirname(os.path.abspath(__file__)) + "/data/bg.png")
-    mask_img = Image.open(os.path.dirname(os.path.abspath(__file__)) + "/data/mask.png")
-    # top_shift_scale = 0.45
-    # x_scale = 0.25
+    id_img = Image.open(os.path.dirname(os.path.abspath(__file__)) + "/data/id.png")
+    mask_img = Image.open(os.path.dirname(os.path.abspath(__file__)) + "/data/mask.png").convert('L')
+
     for (x, y, w, h) in faces:
-        y_shift = int(h * top_shift_scale)
-        x_shift = int(w * x_scale)
-        face_w = max(w + 2 * x_shift, h + y_shift)
-        
-        faceimg = faceimg.resize((face_w, face_w))
-        r, g, b, a = faceimg.split()
-        faceimg.paste(img, (0, 0))
-    faceimg.save(PicPath + outfile)
+        bg_img.paste(img.copy(), (-200, -200))
+        r, g, b, a = fg_img.split()
+        bg_img.paste(fg_img, (0, 0),a)
+
+        id_img.paste(img.resize((712,712)),(0, 300))
+        _img=Image.composite(id_img, bg_img, mask_img)
+    _img.save(PicPath + outfile)
     return 1
 
 
