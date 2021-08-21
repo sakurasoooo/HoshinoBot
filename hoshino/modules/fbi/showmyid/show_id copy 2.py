@@ -2,29 +2,25 @@ import re
 import os
 import cv2
 import time
-import base64
-# from . import config
+from . import config
 import urllib.request
-# import urllib
 from PIL import Image, ImageDraw
 from random import randint
-import numpy as np
+
 from io import BytesIO
 
-from hoshino import util
+from hoshino import aiorequests
 
 # opencv无法使用中文路径
 #PicPath = config.PIC_PATH + 'JieTou/'
 
 
-async def add(purl, cascade_file=os.path.dirname(os.path.abspath(__file__))+"/data/lbpcascade_animeface.xml",qq=0):
-    face_img = 0
-    req = urllib.request.urlopen(purl)
-    arr = np.asarray(bytearray(req.read()),dtype=np.uint8)
-    cvimg = cv2.imdecode(arr,-1)
+async def add(filename, outfile, cascade_file=os.path.dirname(os.path.abspath(__file__))+"/data/lbpcascade_animeface.xml",qq=0):
+    img = Image.open(filename)
+    face_img = img.copy()
     if(qq==False):
         cascade = cv2.CascadeClassifier(cascade_file)
-        # cvimg = cv2.imread(filename, cv2.IMREAD_COLOR)
+        cvimg = cv2.imread(filename, cv2.IMREAD_COLOR)
         gray = cv2.cvtColor(cvimg, cv2.COLOR_BGR2GRAY)
         gray = cv2.equalizeHist(gray)
         faces = cascade.detectMultiScale(gray,
@@ -37,14 +33,7 @@ async def add(purl, cascade_file=os.path.dirname(os.path.abspath(__file__))+"/da
         faces.sort(key=lambda i:int(i[2])*int(i[3]),reverse=True)
         (x, y, w, h) = faces[0]
         
-
-        cvimg = cv2.cvtColor(cvimg,cv2.COLOR_BGR2RGB)
-        face_img = Image.fromarray(cvimg)
-        face_img=face_img.crop((x,y,x+w,y+h))
-    else:
-        cvimg = cv2.cvtColor(cvimg,cv2.COLOR_BGR2RGB)
-        face_img = Image.fromarray(cvimg)
-    
+        face_img=img.crop((x,y,x+w,y+h))
     fg_img = Image.open(os.path.dirname(os.path.abspath(__file__)) + "/data/fg.png")
     bg_img = Image.open(os.path.dirname(os.path.abspath(__file__)) + "/data/bg.png")
     id_img = Image.open(os.path.dirname(os.path.abspath(__file__)) + "/data/id.png")
@@ -58,23 +47,24 @@ async def add(purl, cascade_file=os.path.dirname(os.path.abspath(__file__))+"/da
     id_img.paste(face_img.resize((200,200)),(76, 464))
     _img=Image.composite(id_img, bg_img, mask_img)
     _img=_img.crop((0,68,712,687))
-
-    # buf = BytesIO()
-    # _img.save(buf, format='PNG')
-    _img.save('./test.png')
-    # base64_str = base64.b64encode(buf.getvalue()).decode()
-    return util.pic2b64(_img)
+    _img.save(PicPath + outfile)
+    return 1
 
 
 async def add_head(msg):
     url = re.findall(r'http.*?term=\d', msg)[0]
 
+    p1 = re.compile("/([^/]+)/0")
 
+    if not os.path.exists(PicPath):
+        os.makedirs(PicPath)
     try:
+        file1 = p1.findall(url)[0] + ".png"
 
-        msg = await add(url)
-        if (msg ):
-            return msg
+        urllib.request.urlretrieve(url, PicPath + file1)
+        picname = p1.findall(url)[0] + time.strftime("%F-%H%M%S") + ".png"
+        if await add(PicPath + file1, picname):
+            return f"[CQ:image,file=file:///" + os.path.abspath(PicPath+picname) + "]"
         else:
             return f"[CQ:image,file=file:///{os.path.dirname(os.path.abspath(__file__))+'/data/'}没找到头.png]"
     except Exception as e:
@@ -83,7 +73,7 @@ async def add_head(msg):
 
 async def add_grouphead(msg):
 
-
+    p1 = re.compile("/([^/]+)/0")
 
     url = f'http://q1.qlogo.cn/g?b=qq&nk={msg}&s=160'
 
@@ -91,10 +81,12 @@ async def add_grouphead(msg):
     if not os.path.exists(PicPath):
         os.makedirs(PicPath)
     try:
+        file1 = msg + ".png"
 
-        msg=await add(url, qq=1)
-        if (msg):
-            return msg
+        urllib.request.urlretrieve(url, PicPath + file1)
+        picname = msg + time.strftime("%F-%H%M%S") + ".png"
+        if await add(PicPath + file1, picname, qq=1):
+            return f"[CQ:image,file=file:///" + os.path.abspath(PicPath+picname) + "]"
         else:
             return f"[CQ:image,file=file:///{os.path.dirname(os.path.abspath(__file__))+'/data/'}没找到头.png]"
     except Exception as e:
